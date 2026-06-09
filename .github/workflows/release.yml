@@ -1,0 +1,21 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Grayspace Orbit Release
+        uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
