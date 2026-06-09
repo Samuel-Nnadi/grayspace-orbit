@@ -4,6 +4,7 @@ import sys
 import logging
 from github import Github, GithubException
 import requests
+import google.generativeai as genai
 
 # Configure logging to show up in GitHub Actions
 logging.basicConfig(
@@ -49,6 +50,7 @@ def main():
     target_dir = os.environ.get('INPUT_TARGET-DIRECTORY', '').strip()
     webhook_url = os.environ.get('INPUT_WEBHOOK-URL', '').strip()
     fallback_policy = os.environ.get('INPUT_FALLBACK-POLICY', 'patch').strip().lower()
+    gemini_api_key = os.environ.get('INPUT_GEMINI-API-KEY', '').strip()
     
     repo_name = os.environ.get('GITHUB_REPOSITORY')
     sha = os.environ.get('GITHUB_SHA')
@@ -211,12 +213,51 @@ def main():
     else:
         logger.info(f"Skipping tag creation. Target version is {target_version_name}")
 
+    # AI Summary Pipeline
+    ai_summary = ""
+    if gemini_api_key and not skip_tag_creation:
+        try:
+            logger.info("Engaging Gemini AI pipeline for Business Impact summary.")
+            genai.configure(api_key=gemini_api_key)
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            diff_text = ""
+            if base_tag:
+                comp = repo.compare(base_tag.commit.sha, sha)
+                for f in comp.files:
+                    if not target_dir or f.filename.startswith(target_dir):
+                        if f.patch:
+                            diff_text += f"\n--- {f.filename} ---\n{f.patch}\n"
+            
+            # truncate diff_text to ~60000 chars
+            if len(diff_text) > 60000:
+                diff_text = diff_text[:60000] + "\n...[TRUNCATED]"
+                
+            commit_messages = "\n".join([f"- {c['description']}" for c in parsed_commits])
+            
+            prompt = (
+                "You are an expert Product Manager. Analyze the following technical commits and code diffs "
+                "to write a polished, non-technical 2-paragraph 'Business Impact' summary for our release notes. "
+                "Focus on user value, resolved friction points, and architecture enhancements. "
+                "Do NOT use markdown headings like '# Release'.\n\n"
+                f"Commits:\n{commit_messages}\n\nDiffs:\n{diff_text}"
+            )
+            
+            response = model.generate_content(prompt)
+            if response.text:
+                ai_summary = "## 🌟 Business Impact\n\n" + response.text.strip() + "\n\n"
+        except Exception as e:
+            logger.warning(f"AI Generation failed: {e}")
+
     # Generate Changelog
     features = [c for c in parsed_commits if c['type'] == 'feat']
     fixes = [c for c in parsed_commits if c['type'] == 'fix']
     others = [c for c in parsed_commits if c['type'] not in ['feat', 'fix']]
     
     changelog_lines = [f"# Release {target_version_name}\n"]
+    if ai_summary:
+        changelog_lines.append(ai_summary)
+        
     if features:
         changelog_lines.append("## Features")
         for c in features:

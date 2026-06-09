@@ -45,6 +45,11 @@ jobs:
 | `target-directory` | No | `''` | Directory to track. Only commits affecting this directory will trigger a release. Resulting tags will be prefixed (e.g., `apps-api-v1.0.0`). |
 | `webhook-url` | No | `''` | Slack or Discord webhook URL for release notifications. |
 | `fallback-policy` | No | `'patch'` | Strict policy for handling non-compliant commits. Options: `patch` (default bump), `skip` (graceful exit without release), `fail` (quarantine release and fail pipeline). |
+| `gemini-api-key` | No | `''` | Optional Gemini API key to power AI-driven Business Impact summaries in your release notes. |
+
+## AI-Driven Ecosystem Expansion (V3)
+
+Grayspace Orbit integrates directly with Google's Gemini models (`gemini-1.5-flash`). If a `gemini-api-key` is provided, the engine will extract the raw `.patch` diffs and commit messages, aggregating them to generate a highly polished, non-technical "Business Impact" summary. This summary is injected dynamically at the top of your GitHub Release changelogs.
 
 ## State Reconciliation (V2)
 

@@ -16,6 +16,10 @@ inputs:
     description: 'Policy for non-compliant commits: patch (default), skip, or fail'
     required: false
     default: 'patch'
+  gemini-api-key:
+    description: 'Optional Gemini API key for AI-driven Business Impact summaries'
+    required: false
+    default: ''
 outputs:
   new-version:
     description: 'The new semantic version generated'
