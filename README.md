@@ -1,64 +1,98 @@
-# Grayspace Orbit
+# 🚀 Grayspace Orbit
 
-A production-grade, reusable GitHub Action that automates semantic versioning, changelog generation, and GitHub releases. 
-Powered by Python and Docker, this action handles parsing Conventional Commits and ensures idempotency for robust deployments.
+Grayspace Orbit is a production-grade, highly durable GitHub Action that fully automates your semantic versioning, changelog generation, and GitHub releases. 
 
-## Features
+Built for massive microservice architectures, it features robust state reconciliation, strict conventional commit enforcement, and an optional AI-driven Business Impact pipeline powered by Google Gemini.
 
-- **Semantic Versioning:** Automatically parses Conventional Commits to bump MAJOR, MINOR, or PATCH versions.
-- **Monorepo Support:** Pass a `target-directory` to only track commits affecting specific directories.
-- **Idempotency:** Safe to run twice! It resumes gracefully if a previous run tagged but failed to release.
-- **Rich Notifications:** Post release updates directly to a Slack or Discord webhook.
+## ⚡ Quick Start (Under 60 Seconds)
 
-## Usage
-
-Create a workflow file in your repository (e.g., `.github/workflows/release.yml`):
+To adopt Grayspace Orbit seamlessly, just drop this 10-line snippet into a new workflow file (e.g., `.github/workflows/release.yml`) and push it to your `main` branch.
 
 ```yaml
 name: Release
-
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
+permissions:
+  contents: write # Required to push tags and releases
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Grayspace Orbit Release
-        uses: user/grayspace-orbit@v1 # Replace with the actual org/repo of this action
+      - uses: actions/checkout@v4
+      - uses: Samuel-Nnadi/grayspace-orbit@v1 # Use the latest version
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          target-directory: 'apps/api' # Optional
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }} # Optional
 ```
 
-## Inputs
+---
+
+## 🛡️ Zero-Knowledge Architecture
+
+Grayspace Orbit is designed with absolute security in mind:
+- **No Long-Lived Credentials:** It operates exclusively using the short-lived, automatically generated `GITHUB_TOKEN` provided by the Actions runner.
+- **Stateless Execution:** No source code or proprietary history is ever transmitted to an external server or telemetry endpoint.
+- **In-Memory Parsing:** Commit processing and Git Tag calculations happen entirely locally within the isolated, ephemeral Docker container.
+
+---
+
+## 🌟 AI-Driven Ecosystem Expansion (V3)
+
+Tired of release notes that just regurgitate technical commits like `fix: typo in db config`? 
+
+Grayspace Orbit natively integrates with Google Gemini (`gemini-1.5-flash`). Simply provide a `gemini-api-key`, and the engine will dynamically extract your raw `.patch` diffs, analyze the actual code changes, and synthesize a highly polished, non-technical **Business Impact** summary for your stakeholders.
+
+```yaml
+      - uses: Samuel-Nnadi/grayspace-orbit@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+```
+
+---
+
+## 🏗️ Massive Monorepo Support
+
+If you have a 22-microservice architecture, standard release tools will corrupt your tags. Grayspace Orbit allows you to define a `target-directory` to perfectly isolate your tags. A change in `/auth-service` will seamlessly trigger `auth-service-v1.1.0` while leaving `/payment-gateway` completely untouched.
+
+To release multiple services concurrently, utilize a GitHub Actions matrix:
+
+```yaml
+    strategy:
+      matrix:
+        service: [auth-service, payment-gateway, inventory-service]
+    steps:
+      - uses: Samuel-Nnadi/grayspace-orbit@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          target-directory: ${{ matrix.service }}
+```
+
+---
+
+## ⚙️ The action.yml Contract
+
+We strictly type and document all inputs and outputs to ensure flawless integration.
+
+### Inputs
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `github-token` | Yes | N/A | GitHub Token for API authentication. `${{ secrets.GITHUB_TOKEN }}` usually suffices. |
-| `target-directory` | No | `''` | Directory to track. Only commits affecting this directory will trigger a release. Resulting tags will be prefixed (e.g., `apps-api-v1.0.0`). |
-| `webhook-url` | No | `''` | Slack or Discord webhook URL for release notifications. |
-| `fallback-policy` | No | `'patch'` | Strict policy for handling non-compliant commits. Options: `patch` (default bump), `skip` (graceful exit without release), `fail` (quarantine release and fail pipeline). |
-| `gemini-api-key` | No | `''` | Optional Gemini API key to power AI-driven Business Impact summaries in your release notes. |
+| `github-token` | **Yes** | N/A | Short-lived GitHub Token for API authentication. `${{ secrets.GITHUB_TOKEN }}`. |
+| `target-directory` | No | `''` | Directory to track. Only commits affecting this directory will trigger a release. |
+| `webhook-url` | No | `''` | Slack/Discord webhook URL for automated release notifications. |
+| `fallback-policy` | No | `'patch'` | Strict policy for handling non-compliant commits: `patch` (default bump), `skip` (graceful exit), or `fail` (quarantine release). |
+| `gemini-api-key` | No | `''` | Optional Gemini API key to power AI-driven Business Impact summaries. |
 
-## AI-Driven Ecosystem Expansion (V3)
-
-Grayspace Orbit integrates directly with Google's Gemini models (`gemini-1.5-flash`). If a `gemini-api-key` is provided, the engine will extract the raw `.patch` diffs and commit messages, aggregating them to generate a highly polished, non-technical "Business Impact" summary. This summary is injected dynamically at the top of your GitHub Release changelogs.
-
-## State Reconciliation (V2)
-
-If a release pipeline fails midway (e.g. tag pushed, but release API times out), Grayspace Orbit will safely resume the release process on the exact commit without throwing a fatal error.
-Additionally, it automatically detects and cleans up "orphaned tags" (tags matching the prefix that have no corresponding GitHub release attached to them) so that your repository remains clean.
-
-## Outputs
+### Outputs
 
 | Name | Description |
 |------|-------------|
-| `new-version` | The semantic version that was just published (e.g., `v1.2.3`). |
+| `new-version` | The exact semantic version tag that was just published (e.g., `v1.2.3`). |
 | `release-url` | The URL to the official GitHub Release page. |
+
+---
+
+## 🔄 State Reconciliation
+
+If your pipeline fails midway through (e.g. the Git tag is pushed but the GitHub REST API times out before publishing the release), Grayspace Orbit will safely resume the process on the exact commit without throwing a fatal error. It also actively cleans up "orphaned tags" to keep your repository state immaculate.

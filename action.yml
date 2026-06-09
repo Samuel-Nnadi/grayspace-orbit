@@ -1,5 +1,8 @@
-name: 'grayspace-orbit'
-description: 'Automates semantic versioning, changelog generation, and GitHub releases.'
+name: 'Grayspace Orbit'
+description: 'Automates semantic versioning, changelog generation, and AI-driven GitHub releases.'
+branding:
+  icon: 'rocket'
+  color: 'gray-dark'
 inputs:
   github-token:
     description: 'GitHub Token for authentication'
