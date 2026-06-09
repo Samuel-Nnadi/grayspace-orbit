@@ -11,6 +11,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth-service, payment-gateway, email-service, inventory-service, user-service]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,3 +22,4 @@ jobs:
         uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          target-directory: ${{ matrix.service }}
