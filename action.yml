@@ -1,0 +1,22 @@
+name: 'grayspace-orbit'
+description: 'Automates semantic versioning, changelog generation, and GitHub releases.'
+inputs:
+  github-token:
+    description: 'GitHub Token for authentication'
+    required: true
+  target-directory:
+    description: 'Monorepo support: Directory to track for changes'
+    required: false
+    default: ''
+  webhook-url:
+    description: 'Slack/Discord webhook URL for release notifications'
+    required: false
+    default: ''
+outputs:
+  new-version:
+    description: 'The new semantic version generated'
+  release-url:
+    description: 'URL of the published GitHub release'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
