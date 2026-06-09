@@ -48,6 +48,7 @@ def main():
         
     target_dir = os.environ.get('INPUT_TARGET-DIRECTORY', '').strip()
     webhook_url = os.environ.get('INPUT_WEBHOOK-URL', '').strip()
+    fallback_policy = os.environ.get('INPUT_FALLBACK-POLICY', 'patch').strip().lower()
     
     repo_name = os.environ.get('GITHUB_REPOSITORY')
     sha = os.environ.get('GITHUB_SHA')
@@ -76,32 +77,46 @@ def main():
                     relevant_tags.append((parts, t))
             except ValueError:
                 pass
-                
-    relevant_tags.sort(key=lambda x: x[0], reverse=True)
+
+    releases = list(repo.get_releases())
+    release_tag_names = {r.tag_name for r in releases}
     
-    latest_tag = relevant_tags[0][1] if relevant_tags else None
-    previous_tag = relevant_tags[1][1] if len(relevant_tags) > 1 else None
-    current_version = relevant_tags[0][0] if relevant_tags else [0, 0, 0]
+    valid_tags = []
+    for parts, t in relevant_tags:
+        if t.name in release_tag_names:
+            valid_tags.append((parts, t))
+        else:
+            if t.commit.sha == sha:
+                # This is the tag we are reconciling right now
+                valid_tags.append((parts, t))
+            else:
+                # Orphaned tag on an older commit
+                logger.warning(f"Found orphaned tag {t.name} on older commit {t.commit.sha}. Deleting ref.")
+                try:
+                    repo.get_git_ref(f"tags/{t.name}").delete()
+                except GithubException as e:
+                    logger.warning(f"Could not delete orphaned tag {t.name}: {e}")
+                
+    valid_tags.sort(key=lambda x: x[0], reverse=True)
+    
+    latest_tag = valid_tags[0][1] if valid_tags else None
+    previous_tag = valid_tags[1][1] if len(valid_tags) > 1 else None
+    current_version = valid_tags[0][0] if valid_tags else [0, 0, 0]
     
     # Idempotency check: Did it fail after tagging?
     if latest_tag and latest_tag.commit.sha == sha:
         logger.info(f"Latest tag {latest_tag.name} points to current HEAD ({sha}).")
-        # Check if release exists
-        try:
-            release = repo.get_release(latest_tag.name)
+        if latest_tag.name in release_tag_names:
+            release = next((r for r in releases if r.tag_name == latest_tag.name), None)
             logger.info(f"Release {release.tag_name} already exists. Exiting cleanly.")
             set_output('new-version', latest_tag.name)
             set_output('release-url', release.html_url)
             sys.exit(0)
-        except GithubException as e:
-            if e.status == 404:
-                logger.info("Release does not exist. Resuming release creation.")
-                # We need commits from previous_tag to HEAD to generate changelog
-                base_tag = previous_tag
-                target_version_name = latest_tag.name
-                skip_tag_creation = True
-            else:
-                raise
+        else:
+            logger.info("Release does not exist for the tag on HEAD. Resuming release creation.")
+            base_tag = previous_tag
+            target_version_name = latest_tag.name
+            skip_tag_creation = True
     else:
         base_tag = latest_tag
         target_version_name = None # To be calculated
@@ -134,7 +149,8 @@ def main():
         sys.exit(0)
         
     # Analyze commits
-    bump_type = 'patch' # default to patch
+    bump_type = None
+    has_conventional = False
     parsed_commits = []
     
     for c in commits:
@@ -144,10 +160,32 @@ def main():
         parsed['author'] = c.commit.author.name if c.commit.author else 'Unknown'
         parsed_commits.append(parsed)
         
+        if parsed['type'] != 'other':
+            has_conventional = True
+            
         if parsed['is_breaking']:
             bump_type = 'major'
         elif parsed['type'] == 'feat' and bump_type != 'major':
             bump_type = 'minor'
+        elif parsed['type'] == 'fix' and bump_type not in ['major', 'minor']:
+            bump_type = 'patch'
+            
+    if not has_conventional:
+        if fallback_policy == 'fail':
+            logger.error("No conventional commits found and fallback-policy is 'fail'.")
+            if webhook_url:
+                payload = {"text": "❌ **Release Failed**: Non-compliant commits detected. Developers must use Conventional Commits."}
+                requests.post(webhook_url, json=payload)
+            sys.exit(1)
+        elif fallback_policy == 'skip':
+            logger.info("No conventional commits found and fallback-policy is 'skip'. Exiting gracefully.")
+            set_output('new-version', f"{prefix}{current_version[0]}.{current_version[1]}.{current_version[2]}")
+            sys.exit(0)
+        else:
+            logger.info("No conventional commits found. Defaulting to patch bump.")
+            bump_type = 'patch'
+    elif bump_type is None:
+        bump_type = 'patch'
             
     if not skip_tag_creation:
         if bump_type == 'major':
@@ -163,7 +201,13 @@ def main():
         
         # Create tag
         logger.info(f"Creating tag {target_version_name} on {sha}")
-        repo.create_git_ref(ref=f"refs/tags/{target_version_name}", sha=sha)
+        try:
+            repo.create_git_ref(ref=f"refs/tags/{target_version_name}", sha=sha)
+        except GithubException as e:
+            if e.status == 422 and "Reference already exists" in e.data.get('message', ''):
+                logger.warning(f"Tag {target_version_name} already exists. Assuming state reconciliation and proceeding.")
+            else:
+                raise
     else:
         logger.info(f"Skipping tag creation. Target version is {target_version_name}")
 

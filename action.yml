@@ -12,6 +12,10 @@ inputs:
     description: 'Slack/Discord webhook URL for release notifications'
     required: false
     default: ''
+  fallback-policy:
+    description: 'Policy for non-compliant commits: patch (default), skip, or fail'
+    required: false
+    default: 'patch'
 outputs:
   new-version:
     description: 'The new semantic version generated'

@@ -44,6 +44,12 @@ jobs:
 | `github-token` | Yes | N/A | GitHub Token for API authentication. `${{ secrets.GITHUB_TOKEN }}` usually suffices. |
 | `target-directory` | No | `''` | Directory to track. Only commits affecting this directory will trigger a release. Resulting tags will be prefixed (e.g., `apps-api-v1.0.0`). |
 | `webhook-url` | No | `''` | Slack or Discord webhook URL for release notifications. |
+| `fallback-policy` | No | `'patch'` | Strict policy for handling non-compliant commits. Options: `patch` (default bump), `skip` (graceful exit without release), `fail` (quarantine release and fail pipeline). |
+
+## State Reconciliation (V2)
+
+If a release pipeline fails midway (e.g. tag pushed, but release API times out), Grayspace Orbit will safely resume the release process on the exact commit without throwing a fatal error.
+Additionally, it automatically detects and cleans up "orphaned tags" (tags matching the prefix that have no corresponding GitHub release attached to them) so that your repository remains clean.
 
 ## Outputs
 
